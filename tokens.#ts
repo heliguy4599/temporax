@@ -1,0 +1,143 @@
+type LexResult<T extends Token> = {
+	token: T,
+	new_index: number,
+}
+
+export class Token {
+	static try_lex(input: string, index: number): LexResult<Token> | null {
+		void input, index
+		throw new Error(`${this.name} did not implement 'try_lex'!`)
+	}
+}
+
+export class Num extends Token {
+	static override try_lex(input: string, index: number): LexResult<Num> | null {
+		const length = input.length
+		let num_str = ""
+		let seen_dot = false
+
+		while (index < length) {
+			const char: string = input[index]!
+			if (/\d/.test(char)) {
+				num_str += char
+			} else if (char === "." && !seen_dot) {
+				seen_dot = true
+				num_str += char
+			} else {
+				break
+			}
+			index += 1
+		}
+
+		if (num_str.length < 1) return null
+		const value = Number(num_str)
+		if (!Number.isFinite(value)) throw new Error(`Invalid number ${num_str}`)
+		return {
+			token: new Num(value),
+			new_index: index,
+		}
+	}
+
+	constructor(
+		readonly value: number,
+	) {
+		super()
+	}
+}
+
+export abstract class Operator extends Token {
+	abstract readonly precedence: number
+	abstract readonly raw: string
+	abstract operate(left: Num, right: Num): Num
+}
+
+export class Paren extends Operator {
+	static override try_lex(input: string, index: number): LexResult<Paren> | null {
+		const char = input[index]
+		return (char === "(" || char === ")"
+			? { token: new Paren(char), new_index: index + 1 }
+			: null
+		)
+	}
+
+	override readonly precedence: number = -1
+	override readonly raw: "(" | ")"
+
+	constructor(raw: Paren["raw"]) {
+		super()
+		this.raw = raw
+	}
+
+	override operate(): never {
+		throw new Error("Paren token should never be operated upon!")
+	}
+}
+
+export class Plus extends Operator {
+	static override try_lex(input: string, index: number): LexResult<Plus> | null {
+		return (input[index] === "+"
+			? { token: new Plus(), new_index: index + 1 }
+			: null
+		)
+	}
+
+	override readonly precedence: number = 0
+	override readonly raw = "+"
+	override operate(left: Num, right: Num): Num {
+		return new Num(left.value + right.value)
+	}
+}
+
+export class Sub extends Operator {
+	static override try_lex(input: string, index: number): LexResult<Sub> | null {
+		return (input[index] === "-"
+			? { token: new Sub(), new_index: index + 1 }
+			: null
+		)
+	}
+
+	override readonly precedence: number = 0
+	override readonly raw = "-"
+	override operate(left: Num, right: Num): Num {
+		return new Num(left.value - right.value)
+	}
+}
+
+export class Mult extends Operator {
+	static override try_lex(input: string, index: number): LexResult<Mult> | null {
+		return (input[index] === "*"
+			? { token: new Mult(), new_index: index + 1 }
+			: null
+		)
+	}
+
+	override readonly precedence: number = 1
+	override readonly raw = "*"
+	override operate(left: Num, right: Num): Num {
+		return new Num(left.value * right.value)
+	}
+}
+
+export class Div extends Operator {
+	static override try_lex(input: string, index: number): LexResult<Div> | null {
+		return (input[index] === "/"
+			? { token: new Div(), new_index: index + 1 }
+			: null
+		)
+	}
+
+	override readonly precedence: number = 1
+	override readonly raw = "/"
+	override operate(left: Num, right: Num): Num {
+		return new Num(left.value / right.value)
+	}
+}
+
+export const lex_tryers = [
+	Num.try_lex.bind(Num),
+	Plus.try_lex.bind(Plus),
+	Sub.try_lex.bind(Sub),
+	Mult.try_lex.bind(Mult),
+	Div.try_lex.bind(Div),
+	Paren.try_lex.bind(Paren),
+] as const

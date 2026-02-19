@@ -1,0 +1,190 @@
+export enum TokenType {
+	NUMBER = "NUMBER",
+	DURATION = "DURATION",
+	TIME = "TIME",
+	DATE = "DATE",
+
+	PLUS = "+",
+	MINUS = "-",
+	STAR = "*",
+	SLASH = "/",
+	LPAREN = "(",
+	RPAREN = ")",
+
+	EOF = "EOF",
+}
+
+export interface Token {
+	type: TokenType
+	value: string
+	pos: number
+}
+
+export class Lexer {
+	private readonly input: string
+	private pos = 0
+	private readonly len: number
+
+	constructor(input: string) {
+		this.input = input
+		this.len = input.length
+	}
+
+	tokenize(): Token[] {
+		const tokens: Token[] = []
+
+		while (true) {
+			this.#skipWhitespace()
+
+			if (this.pos >= this.len) {
+				tokens.push({ type: TokenType.EOF, value: "", pos: this.pos })
+				break
+			}
+
+			const ch = this.#peek()
+			if (ch === undefined) break // defensive
+
+			// operators
+			if (ch === "+") {
+				tokens.push(this.#makeSimple(TokenType.PLUS))
+				continue
+			}
+			if (ch === "-") {
+				tokens.push(this.#makeSimple(TokenType.MINUS))
+				continue
+			}
+			if (ch === "*") {
+				tokens.push(this.#makeSimple(TokenType.STAR))
+				continue
+			}
+			if (ch === "/") {
+				tokens.push(this.#makeSimple(TokenType.SLASH))
+				continue
+			}
+			if (ch === "(") {
+				tokens.push(this.#makeSimple(TokenType.LPAREN))
+				continue
+			}
+			if (ch === ")") {
+				tokens.push(this.#makeSimple(TokenType.RPAREN))
+				continue
+			}
+
+			if (this.#isDigit(ch)) {
+				tokens.push(this.#lexNumberish())
+				continue
+			}
+
+			throw new SyntaxError(
+				`Unexpected character '${ch}' at position ${this.pos}`,
+			)
+		}
+
+		return tokens
+	}
+
+	// -----------------
+
+	#peek(offset = 0): string | undefined {
+		return this.input[this.pos + offset]
+	}
+
+	#makeSimple(type: TokenType): Token {
+		const ch = this.#peek()
+		if (ch === undefined) {
+			throw new SyntaxError(`Unexpected end of input at ${this.pos}`)
+		}
+
+		const token: Token = {
+			type,
+			value: ch,
+			pos: this.pos,
+		}
+		this.pos++
+		return token
+	}
+
+	#skipWhitespace(): void {
+		while (true) {
+			const ch = this.#peek()
+			if (ch === undefined || !/\s/.test(ch)) break
+			this.pos++
+		}
+	}
+
+	#isDigit(ch: string | undefined): ch is string {
+		return ch !== undefined && ch >= "0" && ch <= "9"
+	}
+
+	// DATE | TIME | DURATION | NUMBER
+	#lexNumberish(): Token {
+		const rest = this.input.slice(this.pos)
+
+		// DATE or DATETIME
+		const dateRe = /^(\d{4}-\d{1,2}-\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm|a|p)?)?)/i
+		const dateMatch = rest.match(dateRe)
+		if (dateMatch) {
+			const raw = dateMatch[1]
+			const token: Token = { type: TokenType.DATE, value: raw!, pos: this.pos }
+			this.pos += raw!.length
+			return token
+		}
+
+		// TIME
+		const timeRe
+			= /^(\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm|a|p)?)/i
+		const timeMatch = rest.match(timeRe)
+		if (timeMatch) {
+			const raw = timeMatch[1]
+			const token: Token = { type: TokenType.TIME, value: raw!.trim(), pos: this.pos }
+			this.pos += raw!.length
+			return token
+		}
+
+		// DURATION
+		const durationRe = /^(\d+(\.\d+)?\s*(?:y|mo|w|d|h|m|s|ms))(?:\s*\d+(\.\d+)?\s*(?:y|mo|w|d|h|m|s|ms))*/i
+		const durMatch = rest.match(durationRe)
+		if (durMatch) {
+			const raw = durMatch[0]
+			const token: Token = { type: TokenType.DURATION, value: raw.trim(), pos: this.pos }
+			this.pos += raw.length
+			return token
+		}
+
+		// NUMBER fallback
+		const numRe = /^(\d+(\.\d+)?)/
+		const numMatch = rest.match(numRe)
+
+		if (numMatch) {
+			const raw = numMatch[1]
+			const token: Token = { type: TokenType.NUMBER, value: raw!, pos: this.pos }
+			this.pos += raw!.length
+			return token
+		}
+
+		throw new SyntaxError(
+			`Unrecognized numeric literal at position ${this.pos}`,
+		)
+	}
+}
+
+function test(input: string): void {
+	const lexer = new Lexer(input)
+	const tokens = lexer.tokenize()
+
+	console.log("INPUT:")
+	console.log("  ", input)
+	console.log("TOKENS:")
+
+	for (const token of tokens) {
+		console.log(token)
+	}
+
+	console.log("------------------------------------\n")
+}
+
+test("2h 2h 10:03 3m + 10")
+test("03:20 + 2h")
+test("9:00a - 1h")
+test("2026-10-02 + 1d")
+test("10 ** (2h + 30m)")

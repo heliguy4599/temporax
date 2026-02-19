@@ -1,0 +1,23 @@
+{
+	"name": "ts",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"type": "module",
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"devDependencies": {
+		"@stylistic/eslint-plugin": "^5.8.0",
+		"@types/node": "^25.2.3",
+		"@typescript-eslint/eslint-plugin": "^8.55.0",
+		"@typescript-eslint/parser": "^8.55.0",
+		"eslint": "^9.39.2",
+		"eslint-plugin-jsonc": "^2.21.1",
+		"tsx": "^4.21.0",
+		"typescript": "^5.9.3"
+	}
+}

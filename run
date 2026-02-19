@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+
+if [ -z "$1" ]; then
+    echo "Usage: ./run <entry_file.ts>"
+    exit 1
+fi
+
+entry="$1"
+
+# 1. Check types
+npx tsc --noEmit
+if [ $? -ne 0 ]; then
+    echo "Type checking failed!"
+    exit 1
+fi
+
+# 2. Lint
+npx eslint .
+if [ $? -ne 0 ]; then
+    echo "ESLint failed!"
+    exit 1
+fi
+
+# 3. Run
+npx tsx "${entry}"

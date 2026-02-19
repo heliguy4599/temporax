@@ -1,0 +1,158 @@
+type DisplayUnit = { value: number, suffix: string, title: string, name: string }
+
+type LexResult = {
+	token: Token,
+	next_index: number,
+}
+
+interface LiteralLexer {
+	try_lex(input: string, start: number): LexResult | null
+}
+
+const TEMPORAL_UNITS: DisplayUnit[] = [
+	{ value: 7 * 24 * 60 * 60 * 1000, suffix: "w", title: "Weeks", name: "weeks" },
+	{ value: 24 * 60 * 60 * 1000, suffix: "d", title: "Days", name: "days" },
+	{ value: 60 * 60 * 1000, suffix: "h", title: "Hours", name: "hours" },
+	{ value: 60 * 1000, suffix: "m", title: "Minutes", name: "minutes" },
+	{ value: 1000, suffix: "s", title: "Seconds", name: "seconds" },
+	{ value: 1, suffix: "ms", title: "Milliseconds", name: "milliseconds" },
+] as const
+
+function read_number(input: string, start: number): { value: number, next_index: number } | null {
+	let i = start
+	let seen_dot = false
+
+	while (i < input.length) {
+		const ch = input[i]!
+		if (ch === ".") {
+			if (seen_dot) break
+			seen_dot = true
+			i += 1
+			continue
+		}
+		if (!/[0-9]/.test(ch)) break
+		i += 1
+	}
+
+	if (i === start) return null
+	return {
+		value: parseFloat(input.slice(start, i)),
+		next_index: i,
+	}
+}
+
+abstract class Temporal {
+	static try_lex(input: string, start: number): LexResult | null {
+		return null
+	}
+
+	constructor(
+		readonly millis: number,
+	) {}
+
+	abstract format(): string
+}
+
+class Duration extends Temporal {
+	override format(): string {
+		let remaining = this.millis
+
+		let to_ret = ""
+		for (const [i, unit] of TEMPORAL_UNITS.entries()) {
+			const val = Math.floor(remaining / unit.value)
+			remaining %= unit.value
+			if (val === 0) continue
+			if (i === TEMPORAL_UNITS.length - 1) {
+				to_ret += `${remaining === 0 ? val : (val + remaining).toFixed(3)}${unit.suffix} `
+			} else {
+				to_ret += `${val}${unit.suffix} `
+			}
+		}
+		return to_ret.trim()
+	}
+
+	// TODO: DateTime -> DateTime, Time -> Time
+	add(that: Duration): Duration {
+		return new Duration(this.millis + that.millis)
+	}
+
+	sub(that: Duration): Duration {
+		return new Duration(this.millis - that.millis)
+	}
+
+	mult(by: number): Duration {
+		return new Duration(this.millis * by)
+	}
+
+	div(by: Duration | number): Duration | number | null {
+		if (by instanceof Duration) {
+			return by.millis === 0 ? null : this.millis / by.millis
+		} else {
+			return by === 0 ? null : new Duration(this.millis / by)
+		}
+	}
+}
+
+type Token = (
+	| { type: "duration", raw: string }
+	| { type: "number", raw: string }
+	| { type: "operator", value: string }
+	| { type: "paren", value: "(" | ")" }
+)
+
+const LITERAL_LEXERS: LiteralLexer[] = [Duration] as const
+
+const OPERATORS = [
+	"**",
+	"+",
+	"-",
+	"*",
+	"/",
+	"(",
+	")",
+].sort((a, b) => b.length - a.length)
+
+function match_operator(input: string, start: number): string | null {
+	for (const op of OPERATORS) {
+		if (input.startsWith(op, start)) {
+			return op
+		}
+	}
+	return null
+}
+
+function tokenize(input: string): Token[] {
+	const tokens: Token[] = []
+
+	let i = 0
+	outer: while (i < input.length) {
+		if (/\s/.test(input[i]!)) {
+			i += 1
+			continue
+		}
+
+		for (const lexer of LITERAL_LEXERS) {
+			const result: LexResult | null = lexer.try_lex(input, i)
+			if (result) {
+				tokens.push(result.token)
+				i = result.next_index
+				continue outer
+			}
+		}
+
+		const maybe_op: string | null = match_operator(input, i)
+		if (maybe_op) {
+			tokens.push({ type: "operator", value: maybe_op })
+			i += maybe_op.length
+			continue
+		}
+
+		throw new Error(`Unexpected character at ${i}`)
+	}
+
+	return tokens
+}
+
+console.log(tokenize("2h 30m"))
+console.log(tokenize("-2.5h * (3 + 4"))
+console.log(tokenize("1d ** 2"))
