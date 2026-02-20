@@ -221,8 +221,8 @@ export class OperatorToken extends Token {
 
 	readonly kind: OpKind
 	readonly raw: string
-	readonly precedence: number
 	readonly operate: (left: number, right: number)=> number
+	precedence: number
 	unary = false
 
 	constructor(kind: OpKind) {

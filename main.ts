@@ -1,5 +1,6 @@
 import readline from "readline"
-import { parse } from "./parser.js"
+// import { parse } from "./parser.js"
+import { Parser2 } from "./parser2.js"
 
 async function main(): Promise<void> {
 	const rl = readline.createInterface({
@@ -23,7 +24,7 @@ async function main(): Promise<void> {
 		}
 
 		try {
-			const result = parse(trimmed)
+			const result = new Parser2(input).evaluate()
 			console.log("=", result)
 		} catch (err) {
 			console.log("!", err instanceof Error ? err.message : err)
