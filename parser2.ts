@@ -35,7 +35,6 @@ class TokenStack<T extends ValueToken | OperatorToken> {
 
 export class Parser2 {
 	readonly #input: string
-	// readonly #length: number
 	readonly #lexer
 	readonly #operators = new TokenStack<OperatorToken>()
 	readonly #values = new TokenStack<ValueToken>()
@@ -43,7 +42,6 @@ export class Parser2 {
 
 	constructor(input: string) {
 		this.#input = input
-		// this.#length = input.length
 		this.#lexer = new Lexer(this.#input)
 	}
 
@@ -57,7 +55,7 @@ export class Parser2 {
 		if (op.unary) {
 			const val_func = unary_op_table[op.kind]?.[right.kind]
 			if (!val_func) {
-				throw new EvalError(`Unsupported unary operation: '${op.raw} ${right.value}'`)
+				throw new EvalError(`Unsupported unary operation: '${op.raw} ${right.kind}'`)
 			}
 			value = val_func(right)
 		} else {
@@ -81,8 +79,8 @@ export class Parser2 {
 				this.#last_was_value = true
 				continue
 			} else if (!(token instanceof OperatorToken)) {
-				// throw new Error(`Unrecognized Token type: ${token}`)
-				continue
+				throw new Error(`Unrecognized Token type: ${token}`)
+				// continue
 			} // 'token' IS OperatorToken now!
 
 			if (token.kind === "l_paren") {
