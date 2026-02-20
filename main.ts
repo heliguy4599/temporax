@@ -24,7 +24,7 @@ async function main(): Promise<void> {
 		}
 
 		try {
-			const result = new Parser2(input).evaluate()
+			const result = new Parser2(input).evaluate().format()
 			console.log("=", result)
 		} catch (err) {
 			console.log("!", err instanceof Error ? err.message : err)
