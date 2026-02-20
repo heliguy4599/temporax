@@ -67,7 +67,7 @@ export const duration_suffix_to_mult: { [Unit in DurationUnit]: number } = {
 	MINUTE: 60 * 1000,
 	SECOND: 1000,
 	MILLISECOND: 1,
-}
+} as const
 
 export const duration_suffixes_to_unit: Record<string, DurationUnit> = {
 	w: "WEEK",

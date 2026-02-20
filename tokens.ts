@@ -70,6 +70,7 @@ export class NumToken extends ValueToken {
 	override readonly kind = "num"
 }
 
+// TODO: Handle leap years!!!!!!!!!!!
 const month_max_days = {
 	yes_leap_year: [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
 	// not_leap_year: [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
@@ -97,10 +98,16 @@ class DateToken extends ValueToken {
 		}
 
 		const ms = Date.UTC(year, month - 1, day)
-		return { token: new DateToken(ms), new_index: matches.new_index }
+		return { token: new DateToken(ms, true), new_index: matches.new_index }
 	}
 
 	override readonly kind = "date"
+	readonly from_literal: boolean
+
+	constructor(value: number, from_literal?: boolean) {
+		super(value)
+		this.from_literal = from_literal ?? false
+	}
 }
 
 type TimeSuffixes = "AM" | "PM"
@@ -182,15 +189,17 @@ class DurationToken extends ValueToken {
 		if (!unit) throw new SyntaxError(`Invalid duration suffix '${suffix}'`)
 		const multiplier = duration_suffix_to_mult[unit]
 		return {
-			token: new DurationToken(num_token_match.token.value * multiplier),
+			token: new DurationToken(num_token_match.token.value * multiplier, unit),
 			new_index: suffix_match.new_index,
 		}
 	}
 
 	override readonly kind = "duration"
+	readonly from_suffix: DurationUnit | ""
 
-	constructor(value: number) {
+	constructor(value: number, suffix?: DurationUnit) {
 		super(value)
+		this.from_suffix = suffix ?? ""
 	}
 }
 
@@ -282,7 +291,7 @@ export const binary_op_table: BinaryOpTable = {
 type UnaryOpTable = {
 	[Op in Exclude<OpKind, "l_paren" | "r_paren">]: {
 		[Right in ValueKind]?: (token: ValueToken)=> ValueToken
-	} | null
+	}
 }
 
 export const unary_op_table: UnaryOpTable = {
@@ -294,22 +303,49 @@ export const unary_op_table: UnaryOpTable = {
 		num: (token) => new val_kind_to_ctor["num"](-token.value),
 		duration: (token) => new val_kind_to_ctor["duration"](-token.value),
 	},
-	mult: null,
-	div: null,
+	mult: {},
+	div: {},
 } as const
 
-// type ImplicitCombinationsTable = {
-// 	[Left in ValueKind]: {
-// 		[Right in ValueKind]?: OpKind
-// 	} | null
-// }
+type ImplicitOpTable = {
+	[Left in ValueKind]: {
+		[Right in ValueKind]?: (
+			left: InstanceType<typeof val_kind_to_ctor[Left]>,
+			right: InstanceType<typeof val_kind_to_ctor[Right]>,
+		)=> ValueToken
+	}
+}
 
-// export const implicit_combinations_table: ImplicitCombinationsTable = {
-// 	num: null,
-// 	date: { time: "plus" },
-// 	time: null,
-// 	duration: { duration: "plus" },
-// }
+const implicit_op_table: ImplicitOpTable = {
+	num: {},
+	date: {
+		time: (left, right) => {
+			if (!left.from_literal) {
+				throw new SyntaxError("Implicit addition not supported for non-literal dates")
+			}
+			return new DateToken(left.value + right.value)
+		},
+	},
+	time: {},
+	duration: {
+		duration: (left, right) => {
+			if (!left.from_suffix || !right.from_suffix) {
+				throw new SyntaxError("Implicit addition not supported for non-literal durations")
+			}
+			const left_mult = duration_suffix_to_mult[left.from_suffix]
+			const right_mult = duration_suffix_to_mult[right.from_suffix]
+			if (left_mult <= right_mult) {
+				throw new SyntaxError("Implicit addition of durations must decrease in unit")
+			}
+			return new DurationToken(left.value + right.value)
+		},
+	},
+} as const
+
+export const apply_implicit_op = (left: ValueToken, right: ValueToken): ValueToken | undefined => {
+	const implicit_func = implicit_op_table[left.kind][right.kind]
+	return implicit_func?.(left as any, right as any)
+}
 
 export const val_kind_to_ctor = {
 	num: NumToken,

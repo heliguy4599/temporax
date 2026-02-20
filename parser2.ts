@@ -7,6 +7,8 @@ import {
 	binary_op_table,
 	val_kind_to_ctor,
 	unary_op_table,
+	apply_implicit_op,
+	type ValueKind,
 } from "./tokens.js"
 
 class TokenStack<T extends ValueToken | OperatorToken> {
@@ -38,7 +40,7 @@ export class Parser2 {
 	readonly #lexer
 	readonly #operators = new TokenStack<OperatorToken>()
 	readonly #values = new TokenStack<ValueToken>()
-	#last_was_value = false
+	#last_was_value = false // VERY IMPORTANT TO START FALSE!!!
 
 	constructor(input: string) {
 		this.#input = input
@@ -53,7 +55,7 @@ export class Parser2 {
 			throw parens_operated
 		}
 		if (op.unary) {
-			const val_func = unary_op_table[op.kind]?.[right.kind]
+			const val_func = unary_op_table[op.kind][right.kind]
 			if (!val_func) {
 				throw new EvalError(`Unsupported unary operation: '${op.raw} ${right.kind}'`)
 			}
@@ -75,10 +77,21 @@ export class Parser2 {
 	evaluate(): ValueToken {
 		for (const [, token] of this.#lexer.lexinate()) {
 			if (token instanceof ValueToken) {
-				this.#values.push(token)
+				if (this.#last_was_value) {
+					const left = this.#values.pop()
+					const result = apply_implicit_op(left, token)
+					if (!result) {
+						throw new SyntaxError(`Unexpected token '${token.kind}' after token '${left.kind}'`)
+					}
+					this.#values.push(result)
+				} else {
+					this.#values.push(token)
+				}
 				this.#last_was_value = true
 				continue
-			} else if (!(token instanceof OperatorToken)) {
+			}
+
+			if (!(token instanceof OperatorToken)) {
 				throw new Error(`Unrecognized Token type: ${token}`)
 				// continue
 			} // 'token' IS OperatorToken now!
