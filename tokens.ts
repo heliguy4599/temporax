@@ -4,6 +4,8 @@ import {
 	duration_suffix_to_mult,
 	duration_suffixes_to_unit,
 	type DurationUnit,
+	duration_unit_to_display,
+	trim_float,
 } from "utils.js"
 
 export type LexResult<T extends Token> = {
@@ -43,10 +45,13 @@ export abstract class Token {
 export abstract class ValueToken extends Token {
 	abstract readonly kind: ValueKind
 	readonly value: number
+
 	constructor(value: number) {
 		super()
 		this.value = value
 	}
+
+	abstract format(): string
 }
 
 export class NumToken extends ValueToken {
@@ -68,6 +73,10 @@ export class NumToken extends ValueToken {
 	}
 
 	override readonly kind = "num"
+
+	override format(): string {
+		return trim_float(this.value)
+	}
 }
 
 // TODO: Handle leap years!!!!!!!!!!!
@@ -102,6 +111,20 @@ class DateToken extends ValueToken {
 	}
 
 	override readonly kind = "date"
+
+	override format(): string {
+		const DAY = duration_suffix_to_mult["DAY"]
+		const day_remainder = ((this.value % DAY) + DAY) % DAY
+		const time_string = day_remainder === 0 ? "" : new TimeToken(day_remainder).format()
+
+		const date = new Date(this.value)
+		const year = date.getUTCFullYear()
+		const month = (date.getUTCMonth() + 1).toString().padStart(2, "0")
+		const day = date.getUTCDate().toString().padStart(2, "0")
+
+		return `${year}_${month}_${day} ${time_string}`
+	}
+
 	readonly from_literal: boolean
 
 	constructor(value: number, from_literal?: boolean) {
@@ -164,6 +187,36 @@ class TimeToken extends ValueToken {
 	}
 
 	override readonly kind = "time"
+
+	override format(): string {
+		const DAY = duration_suffix_to_mult["DAY"]
+		const HOUR = duration_suffix_to_mult["HOUR"]
+		const MINUTE = duration_suffix_to_mult["MINUTE"]
+		const SECOND = duration_suffix_to_mult["SECOND"]
+
+		const day_offset = Math.floor(this.value / DAY)
+		const remainder = ((this.value % DAY) + DAY) % DAY
+		const hours = Math.floor(remainder / HOUR)
+		const minutes = Math.floor((remainder % HOUR) / MINUTE)
+		const seconds = Math.floor((remainder % MINUTE) / SECOND)
+		const millis = remainder % SECOND
+
+		const fraction = millis > 0 ? `.${Math.trunc(millis)}` : ""
+		const time_string = (
+			`${hours.toString().padStart(2, "0")}:`
+			+ `${minutes.toString().padStart(2, "0")}:`
+			+ `${seconds.toString().padStart(2, "0")}${fraction}`
+		)
+
+		if (day_offset === 0) {
+			return time_string
+		}
+
+		const abs_days = Math.abs(day_offset)
+		const day_label = abs_days === 1 ? "day" : "days"
+		const sign = day_offset > 0 ? "+" : "-"
+		return `${time_string} (${sign}${abs_days} ${day_label})`
+	}
 }
 
 class DurationToken extends ValueToken {
@@ -174,6 +227,9 @@ class DurationToken extends ValueToken {
 		.join("|"),
 		"i", // case insensitive
 	)
+
+	static readonly sorted_duration_units = Object.entries(duration_suffix_to_mult)
+	.sort(([, val_a], [, val_b]) => val_b - val_a)
 
 	static override try_lex(input: string, index: number): LexResult<DurationToken> | null {
 		const num_token_match = NumToken.try_lex(input, index)
@@ -200,6 +256,33 @@ class DurationToken extends ValueToken {
 	constructor(value: number, suffix?: DurationUnit) {
 		super(value)
 		this.from_suffix = suffix ?? ""
+	}
+
+	override format(): string {
+		let remaining = this.value
+		if (remaining === 0) return "0ms"
+		const sign = remaining < 0 ? "-" : ""
+		remaining = Math.abs(remaining)
+		const parts: string[] = []
+		let i = 0
+		for (const [unit, mult] of DurationToken.sorted_duration_units) {
+			const is_last = i === DurationToken.sorted_duration_units.length - 1
+			i += 1
+			if (remaining < mult && !is_last) continue
+			if (is_last) {
+				const amount = remaining / mult
+				if (amount !== 0) {
+					parts.push(`${trim_float(amount)}${duration_unit_to_display[unit]}`)
+				}
+				break
+			}
+			const whole = Math.floor(remaining / mult)
+			if (whole > 0) {
+				parts.push(`${whole}${duration_unit_to_display[unit]}`)
+				remaining -= whole * mult
+			}
+		}
+		return sign + parts.join(" ")
 	}
 }
 

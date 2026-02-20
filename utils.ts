@@ -69,6 +69,15 @@ export const duration_suffix_to_mult: { [Unit in DurationUnit]: number } = {
 	MILLISECOND: 1,
 } as const
 
+export const duration_unit_to_display: Record<string, string> = {
+	WEEK: "w",
+	DAY: "d",
+	HOUR: "h",
+	MINUTE: "m",
+	SECOND: "s",
+	MILLISECOND: "ms",
+} as const satisfies { [Key in DurationUnit]: string }
+
 export const duration_suffixes_to_unit: Record<string, DurationUnit> = {
 	w: "WEEK",
 	week: "WEEK",
@@ -89,3 +98,5 @@ export const duration_suffixes_to_unit: Record<string, DurationUnit> = {
 } as const
 
 export const is_leap_year = (year: number): boolean => (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0)
+
+export const trim_float = (num: number): string => parseFloat(num.toFixed(3)).toString()
