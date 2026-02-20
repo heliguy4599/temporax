@@ -4,8 +4,9 @@ import {
 	OperatorToken,
 	NumToken,
 	parens_operated,
-	algebra_table,
+	binary_op_table,
 	val_kind_to_ctor,
+	unary_op_table,
 } from "./tokens.js"
 
 class TokenStack<T extends ValueToken | OperatorToken> {
@@ -48,19 +49,29 @@ export class Parser2 {
 
 	collapse(): void {
 		const right: ValueToken = this.#values.pop()
-		const left: ValueToken = this.#values.pop()
 		const op: OperatorToken = this.#operators.pop()
+		let value: ValueToken
 		if (op.kind === "l_paren" || op.kind === "r_paren") {
 			throw parens_operated
 		}
-		if (op.kind === "div" && right.value === 0) {
-			throw new EvalError(`Cannot divide by 0: '${left.value} ${op.raw} ${right.value}'`)
+		if (op.unary) {
+			const val_func = unary_op_table[op.kind]?.[right.kind]
+			if (!val_func) {
+				throw new EvalError(`Unsupported unary operation: '${op.raw} ${right.value}'`)
+			}
+			value = val_func(right)
+		} else {
+			const left: ValueToken = this.#values.pop()
+			if (op.kind === "div" && right.value === 0) {
+				throw new EvalError(`Cannot divide by 0: '${left.value} ${op.raw} ${right.value}'`)
+			}
+			const resulting_kind = binary_op_table[left.kind][op.kind][right.kind]
+			if (!resulting_kind) {
+				throw new EvalError(`Unsupported operation: '${left.kind} ${op.raw} ${right.kind}'`)
+			}
+			value = new val_kind_to_ctor[resulting_kind](op.operate(left.value, right.value))
 		}
-		const resulting_kind = algebra_table[left.kind][op.kind][right.kind]
-		if (!resulting_kind) {
-			throw new EvalError(`Unsupported operation: '${left.kind} ${op.raw} ${right.kind}'`)
-		}
-		this.#values.push(new val_kind_to_ctor[resulting_kind](op.operate(left.value, right.value)))
+		this.#values.push(value)
 	}
 
 	evaluate(): ValueToken {
@@ -100,7 +111,6 @@ export class Parser2 {
 				throw new SyntaxError(`Unexpected operator: '${token.raw}'`)
 			}
 			if (is_unary) {
-				this.#values.push(new NumToken(0))
 				token.unary = true
 				token.precedence = 3
 			}

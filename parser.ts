@@ -28,7 +28,7 @@ export const parse = (input: string): Tokens.Token => {
 		if (op.kind === "div" && right.value === 0) {
 			throw new EvalError(`Cannot divide by 0: '${left.value} ${op.raw} ${right.value}'`)
 		}
-		const resulting_kind = Tokens.algebra_table[left.kind][op.kind][right.kind]
+		const resulting_kind = Tokens.binary_op_table[left.kind][op.kind][right.kind]
 		if (!resulting_kind) throw new Error(`Unsupported operation: '${left.kind} ${op.raw} ${right.kind}'`)
 		nums.push(new Tokens.val_kind_to_ctor[resulting_kind](op.operate(left.value, right.value)))
 		last_was_value = true

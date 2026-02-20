@@ -242,7 +242,7 @@ export const tryers: ((input: string, index: number)=> (LexResult<Token> | null)
 	OperatorToken.try_lex.bind(OperatorToken),
 ] as const
 
-type AlgebraTable = {
+type BinaryOpTable = {
 	[Left in ValueKind]: {
 		[Op in Exclude<OpKind, "l_paren" | "r_paren">]: {
 			[Right in ValueKind]: ValueKind | null
@@ -251,7 +251,7 @@ type AlgebraTable = {
 }
 
 /* eslint-disable */
-export const algebra_table: AlgebraTable = {
+export const binary_op_table: BinaryOpTable = {
 	num: {
 		plus: { num: "num",      date: null,       time: null,       duration: null       },
 		sub:  { num: "num",      date: null,       time: null,       duration: null       },
@@ -278,6 +278,25 @@ export const algebra_table: AlgebraTable = {
 	},
 } as const
 /* eslint-enable */
+
+type UnaryOpTable = {
+	[Op in Exclude<OpKind, "l_paren" | "r_paren">]: {
+		[Right in ValueKind]?: (token: ValueToken)=> ValueToken
+	} | null
+}
+
+export const unary_op_table: UnaryOpTable = {
+	plus: {
+		num: (token) => token,
+		duration: (token) => token,
+	},
+	sub: {
+		num: (token) => new val_kind_to_ctor["num"](-token.value),
+		duration: (token) => new val_kind_to_ctor["duration"](-token.value),
+	},
+	mult: null,
+	div: null,
+} as const
 
 // type ImplicitCombinationsTable = {
 // 	[Left in ValueKind]: {
