@@ -123,7 +123,7 @@ class DateToken extends ValueToken {
 		const day = date.getUTCDate().toString().padStart(2, "0")
 
 		return `${year}_${month}_${day} ${time_string}`
-  }
+	}
 
 	readonly from_literal: boolean
 
