@@ -87,3 +87,5 @@ export const duration_suffixes_to_unit: Record<string, DurationUnit> = {
 	millisec: "MILLISECOND",
 	millisecond: "MILLISECOND",
 } as const
+
+export const is_leap_year = (year: number): boolean => (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0)

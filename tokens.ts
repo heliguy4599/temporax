@@ -6,8 +6,8 @@ import {
 	type DurationUnit,
 } from "utils.js"
 
-export type LexResult = {
-	token: Token,
+export type LexResult<T extends Token> = {
+	token: T,
 	new_index: number,
 }
 
@@ -34,7 +34,7 @@ export type OperatorSpec = {
 }
 
 export abstract class Token {
-	static try_lex(input: string, index: number): LexResult | null {
+	static try_lex(input: string, index: number): LexResult<Token> | null {
 		void input, index
 		throw new Error(`${this.name} did not implement static 'try_lex'!`)
 	}
@@ -50,7 +50,7 @@ export abstract class ValueToken extends Token {
 }
 
 export class NumToken extends ValueToken {
-	static override try_lex(input: string, index: number): LexResult | null {
+	static override try_lex(input: string, index: number): LexResult<NumToken> | null {
 		const matches = parse_chars(
 			input,
 			index,
@@ -75,10 +75,8 @@ const month_max_days = {
 	// not_leap_year: [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
 } as const
 
-const is_leap_year = (year: number): boolean => (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0)
-
 class DateToken extends ValueToken {
-	static override try_lex(input: string, index: number): LexResult | null {
+	static override try_lex(input: string, index: number): LexResult<DateToken> | null {
 		const matches = parse_chars(
 			input,
 			index,
@@ -128,7 +126,7 @@ class TimeToken extends ValueToken {
 		"i", // case insensitive
 	)
 
-	static override try_lex(input: string, index: number): LexResult | null {
+	static override try_lex(input: string, index: number): LexResult<TimeToken> | null {
 		const matches = parse_chars(
 			input,
 			index,
@@ -170,22 +168,23 @@ class DurationToken extends ValueToken {
 		"i", // case insensitive
 	)
 
-	static override try_lex(input: string, index: number): LexResult | null {
-		// TODO: support durations with decimals, eg '1.5h'
-		const matches = parse_chars(
+	static override try_lex(input: string, index: number): LexResult<DurationToken> | null {
+		const num_token_match = NumToken.try_lex(input, index)
+		if (!num_token_match) return null
+		const suffix_match = parse_chars(
 			input,
-			index,
-			{ pattern: /\d/, max: Infinity },
+			num_token_match.new_index,
 			{ pattern: this.#regex_suffixes },
 		)
-		if (!matches) return null
-		const int_part = matches.parts[0]
-		const base_value = finite_or_throw(int_part, `Invalid duration number '${int_part}'`)
-		const suffix = matches.parts[1].toLowerCase()
+		if (!suffix_match) return null
+		const suffix = suffix_match.parts[0]
 		const unit = duration_suffixes_to_unit[suffix]
 		if (!unit) throw new SyntaxError(`Invalid duration suffix '${suffix}'`)
 		const multiplier = duration_suffix_to_mult[unit]
-		return { token: new DurationToken(base_value * multiplier), new_index: matches.new_index }
+		return {
+			token: new DurationToken(num_token_match.token.value * multiplier),
+			new_index: suffix_match.new_index,
+		}
 	}
 
 	override readonly kind = "duration"
@@ -222,7 +221,7 @@ const operator_specs: { [K in OpKind]: OperatorSpec } = {
 } as const
 
 export class OperatorToken extends Token {
-	static override try_lex(input: string, index: number): LexResult | null {
+	static override try_lex(input: string, index: number): LexResult<OperatorToken> | null {
 		const char: string | undefined = input[index]
 		if (index >= input.length || !char) return null
 		for (const [kind, spec] of Object.entries(operator_specs)) {
@@ -250,7 +249,7 @@ export class OperatorToken extends Token {
 	}
 }
 
-export const tryers: ((input: string, index: number)=> (LexResult | null))[] = [
+export const tryers: ((input: string, index: number)=> (LexResult<Token> | null))[] = [
 	DateToken.try_lex.bind(DateToken),
 	TimeToken.try_lex.bind(TimeToken),
 	DurationToken.try_lex.bind(DurationToken),
