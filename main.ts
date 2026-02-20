@@ -1,6 +1,6 @@
 import readline from "readline"
-import { parse } from "./parser.js"
-import { ValueToken } from "tokens.js"
+// import { parse } from "./parser.js"
+import { Parser2 } from "./parser2.js"
 
 async function main(): Promise<void> {
 	const rl = readline.createInterface({
@@ -24,11 +24,8 @@ async function main(): Promise<void> {
 		}
 
 		try {
-			const result = parse(trimmed)
-			if (!(result instanceof ValueToken)) {
-				throw new Error("Unknown result token")
-			}
-			console.log("=", result.format())
+			const result = new Parser2(input).evaluate()
+			console.log("=", result)
 		} catch (err) {
 			console.log("!", err instanceof Error ? err.message : err)
 		}
