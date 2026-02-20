@@ -113,11 +113,6 @@ class TimeToken extends ValueToken {
 		pm: "PM",
 	}
 
-	static readonly suffix_to_hours_add: { [Suffix in TimeSuffixes]: number } = {
-		AM: 0,
-		PM: 12,
-	}
-
 	static readonly #regex_suffixes = new RegExp(
 		Object.keys(this.suffixes)
 		.sort((a, b) => b.length - a.length)
@@ -138,20 +133,25 @@ class TimeToken extends ValueToken {
 		if (!matches) return null
 		const hours = matches.parts[0]
 		const minutes = matches.parts[2]
-		const hours_value = finite_or_throw(hours, `Invalid hour number '${hours}'`)
+		let hours_value = finite_or_throw(hours, `Invalid hour number '${hours}'`)
 		const minutes_value = finite_or_throw(minutes, `Invalid minute number '${minutes}'`)
-		if (hours_value < 0) throw new RangeError(`Inavlid hour value '${hours_value}'`)
-		if (minutes_value < 0) throw new RangeError(`Invalid minutes value '${minutes_value}'`)
+		if (minutes_value < 0 || minutes_value > 59) throw new RangeError(`Invalid minutes value '${minutes_value}'`)
 		const suffix_str = matches.parts[3].toLowerCase()
-		let to_add = 0
 		if (suffix_str) {
 			const suffix = this.suffixes[suffix_str]
 			if (!suffix) throw new SyntaxError(`Invalid time suffix '${suffix_str}'`)
-			to_add = this.suffix_to_hours_add[suffix]
-			// TODO: validate hours when using suffixes.
-			//   Disallow 0:00a when a suffix is present, instead require 12:00a
+			if (hours_value < 1 || hours_value > 12) {
+				throw new RangeError(`Invalid hour '${hours_value}' for 12-hour clock`)
+			}
+			if (suffix === "AM" && hours_value === 12) {
+				hours_value = 0
+			} else if (suffix === "PM" && hours_value !== 12) {
+				hours_value += 12
+			}
+		} else if (hours_value < 0 || hours_value > 23) {
+			throw new RangeError(`Invalid hour '${hours_value}' for 24-hour clock`)
 		}
-		const hours_millis = (hours_value + to_add) * duration_suffix_to_mult["HOUR"]
+		const hours_millis = hours_value * duration_suffix_to_mult["HOUR"]
 		const minute_millis = minutes_value * duration_suffix_to_mult["MINUTE"]
 		return { token: new TimeToken(hours_millis + minute_millis), new_index: matches.new_index }
 	}
@@ -194,21 +194,6 @@ class DurationToken extends ValueToken {
 	}
 }
 
-function parse_digits(input: string, index: number, { min_digits, max_digits } = { min_digits: 1, max_digits: 2 }): {
-	readonly value: number,
-	readonly raw: string,
-	readonly new_index: number,
-} | null {
-	const length = input.length
-	let raw = ""
-	while (index < length && raw.length <= max_digits && /\d/.test(input[index]!)) {
-		raw += input[index]!
-		index += 1
-	}
-	if (raw.length < min_digits) return null
-	return { value: Number(raw), raw, new_index: index }
-}
-
 export const parens_operated = new SyntaxError("Parenthesis cannot be operated upon")
 
 const operator_specs: { [K in OpKind]: OperatorSpec } = {
@@ -227,7 +212,7 @@ export class OperatorToken extends Token {
 		for (const [kind, spec] of Object.entries(operator_specs)) {
 			if (char !== spec.raw) continue
 			return {
-				token: new OperatorToken(kind as OpKind, spec.operate),
+				token: new OperatorToken(kind as OpKind),
 				new_index: index + 1,
 			}
 		}
@@ -240,12 +225,12 @@ export class OperatorToken extends Token {
 	readonly operate: (left: number, right: number)=> number
 	unary = false
 
-	constructor(kind: OpKind, operate: (left: number, right: number)=> number) {
+	constructor(kind: OpKind) {
 		super()
 		this.kind = kind
 		this.raw = operator_specs[kind].raw
 		this.precedence = operator_specs[kind].precedence
-		this.operate = operate
+		this.operate = operator_specs[kind].operate
 	}
 }
 
@@ -293,6 +278,19 @@ export const algebra_table: AlgebraTable = {
 	},
 } as const
 /* eslint-enable */
+
+// type ImplicitCombinationsTable = {
+// 	[Left in ValueKind]: {
+// 		[Right in ValueKind]?: OpKind
+// 	} | null
+// }
+
+// export const implicit_combinations_table: ImplicitCombinationsTable = {
+// 	num: null,
+// 	date: { time: "plus" },
+// 	time: null,
+// 	duration: { duration: "plus" },
+// }
 
 export const val_kind_to_ctor = {
 	num: NumToken,
