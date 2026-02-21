@@ -420,7 +420,7 @@ const implicit_op_table: ImplicitOpTable = {
 			if (left_mult <= right_mult) {
 				throw new SyntaxError("Implicit addition of durations must decrease in unit")
 			}
-			return new DurationToken(left.value + right.value)
+			return new DurationToken(left.value + right.value, right.from_suffix)
 		},
 	},
 } as const
