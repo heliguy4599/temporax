@@ -11,7 +11,7 @@ async function main(): Promise<void> {
 
 	const question = (prompt: string): Promise<string> => new Promise((resolve) => rl.question(prompt, resolve))
 
-	console.log("===[ Algebraic Calculator | Type an expression, or type 'quit' or 'exit' to exit ]===")
+	console.log("===[ Temporax Time Calculator | Type an expression, or type 'quit' or 'exit' to exit ]===")
 
 	while (true) {
 		const input = await question("> ")
