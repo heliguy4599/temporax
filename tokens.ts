@@ -3,9 +3,10 @@ import {
 	finite_or_throw,
 	duration_suffix_to_mult,
 	duration_suffixes_to_unit,
-	type DurationUnit,
 	duration_unit_to_display,
 	trim_float,
+	is_leap_year,
+	type DurationUnit,
 } from "utils.js"
 
 export type LexResult<T extends Token> = {
@@ -40,6 +41,8 @@ export abstract class Token {
 		void input, index
 		throw new Error(`${this.name} did not implement static 'try_lex'!`)
 	}
+
+	readonly #nominalinator = Symbol("unique token symbold")
 }
 
 export abstract class ValueToken extends Token {
@@ -81,8 +84,8 @@ export class NumToken extends ValueToken {
 
 // TODO: Handle leap years!!!!!!!!!!!
 const month_max_days = {
-	yes_leap_year: [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
-	// not_leap_year: [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
+	yes_leap_year: [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
+	not_leap_year: [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
 } as const
 
 class DateToken extends ValueToken {
@@ -100,9 +103,10 @@ class DateToken extends ValueToken {
 		const year = finite_or_throw(matches.parts[0], `Invalid date number '${matches.parts[0]}`)
 		const month = finite_or_throw(matches.parts[2], `Invalid month number '${matches.parts[2]}`)
 		const day = finite_or_throw(matches.parts[4], `Invalud day number '${matches.parts[4]}`)
+		const max_days = is_leap_year(year) ? month_max_days.yes_leap_year : month_max_days.not_leap_year
 
 		if (month < 1 || month > 12) throw new RangeError(`Invalid month number '${month}'`)
-		if (day < 1 || day > month_max_days.yes_leap_year[month - 1]!) {
+		if (day < 1 || day > max_days[month - 1]!) {
 			throw new RangeError(`Invalid day number '${day}' for month '${month}'`)
 		}
 
@@ -286,6 +290,34 @@ class DurationToken extends ValueToken {
 	}
 }
 
+export const keywords: Record<string, ()=> Token> = {
+	now: (): DateToken => new DateToken(Date.now()),
+	noon: (): TimeToken => new TimeToken(43200000 /* midday in MS */),
+	midday: (): TimeToken => new TimeToken(43200000 /* midday in MS */),
+	midnight: (): TimeToken => new TimeToken(0),
+}
+
+const keyword_regex = new RegExp(
+	Object.keys(keywords)
+	.sort((a, b) => b.length - a.length)
+	.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) // escape regex chars
+	.join("|"),
+	"i", // case insensitive
+)
+
+const keyword_try_lex = (input: string, index: number): (LexResult<Token> | null) => {
+	const matches = parse_chars(
+		input,
+		index,
+		{ pattern: keyword_regex },
+	)
+	if (!matches) return null
+	const word: string = matches.parts[0]
+	const token_fn = keywords[word]
+	if (!token_fn) throw new SyntaxError(`Unrecognized keyword: '${word}'`)
+	return { token: token_fn(), new_index: matches.new_index }
+}
+
 export const parens_operated = new SyntaxError("Parenthesis cannot be operated upon")
 
 const operator_specs: { [K in OpKind]: OperatorSpec } = {
@@ -332,6 +364,7 @@ export const tryers: ((input: string, index: number)=> (LexResult<Token> | null)
 	DurationToken.try_lex.bind(DurationToken),
 	NumToken.try_lex.bind(NumToken),
 	OperatorToken.try_lex.bind(OperatorToken),
+	keyword_try_lex,
 ] as const
 
 type BinaryOpTable = {

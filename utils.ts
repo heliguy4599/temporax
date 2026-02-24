@@ -58,9 +58,11 @@ export const finite_or_throw = (input: any, error_message?: string): number => {
 	return value
 }
 
-export type DurationUnit = "WEEK" | "DAY" | "HOUR" | "MINUTE" | "SECOND" | "MILLISECOND"
+export type DurationUnit = "YEAR" | "MONTH" | "WEEK" | "DAY" | "HOUR" | "MINUTE" | "SECOND" | "MILLISECOND"
 
 export const duration_suffix_to_mult: { [Unit in DurationUnit]: number } = {
+	YEAR: 31556952000, // 365.2425 days (adjusted for leap year average)
+	MONTH: 31556952000 / 12, // months average
 	WEEK: 7 * 24 * 60 * 60 * 1000,
 	DAY: 24 * 60 * 60 * 1000,
 	HOUR: 60 * 60 * 1000,
@@ -70,6 +72,8 @@ export const duration_suffix_to_mult: { [Unit in DurationUnit]: number } = {
 } as const
 
 export const duration_unit_to_display: Record<string, string> = {
+	YEAR: "y",
+	MONTH: "mo",
 	WEEK: "w",
 	DAY: "d",
 	HOUR: "h",
@@ -79,6 +83,10 @@ export const duration_unit_to_display: Record<string, string> = {
 } as const satisfies { [Key in DurationUnit]: string }
 
 export const duration_suffixes_to_unit: Record<string, DurationUnit> = {
+	y: "YEAR",
+	year: "YEAR",
+	mo: "MONTH",
+	month: "MONTH",
 	w: "WEEK",
 	week: "WEEK",
 	d: "DAY",
